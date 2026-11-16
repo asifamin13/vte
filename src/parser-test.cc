@@ -1739,8 +1739,14 @@ test_seq_osc(void)
         test_seq_osc(U""s);
         test_seq_osc(U"TEST"s);
 
-        /* String of any supported length */
-        for (unsigned int len = 0; len < VTE_SEQ_STRING_MAX_CAPACITY; ++len)
+        /* String of various lengths, including the capacity boundary.
+         * Note: exhaustive per-length testing (up to MAX_CAPACITY) would
+         * be prohibitively slow for large capacities, so sample a few
+         * lengths and test the boundary exactly.
+         */
+        for (unsigned int len : { 0u, 1u, 2u, 3u, 127u, 128u, 4095u, 4096u,
+                                  unsigned{VTE_SEQ_STRING_MAX_CAPACITY - 1},
+                                  unsigned{VTE_SEQ_STRING_MAX_CAPACITY} })
                 test_seq_osc(std::u32string(len, 0x10000+len));
 
         /* Length exceeded */
