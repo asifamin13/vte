@@ -23,6 +23,7 @@
 #include "ring.hh"
 #include "vterowdata.hh"
 
+#include <algorithm>
 #include <string.h>
 
 #if WITH_SIXEL
@@ -630,6 +631,30 @@ Ring::thaw_row(row_t position,
                                 cell.attr.attr ^= VTE_ATTR_REVERSE;
                         }
                 }
+
+                if (record.is_ascii && cell.attr.columns() == 1) {
+                        gsize len = end - p;
+
+                        if (record.text_start_offset < m_last_attr_text_start_offset)
+                                len = std::min(len, attr_change.text_end_offset - record.text_start_offset);
+
+                        if (_vte_row_data_ensure_len(row, row->len + len)) {
+                                if (hyperlink != nullptr && hyperlink_column >= row->len &&
+                                    gsize(hyperlink_column) < row->len + len)
+                                        *hyperlink = strcpy(m_hyperlink_buf, hyperlink_readbuf);
+
+                                auto cells = row->cells + row->len;
+                                for (gsize i = 0; i < len; i++) {
+                                        cells[i].c = p[i];
+                                        cells[i].attr = cell.attr;
+                                }
+                                row->len += len;
+                                record.text_start_offset += len;
+                                p += len;
+                                continue;
+                        }
+                }
+
 		cell.c = g_utf8_get_char (p);
 
 		q = g_utf8_next_char (p);
@@ -1517,7 +1542,12 @@ Ring::rewrap(column_t columns,
 				paragraph_len -= runlength;
 			} else {
 				while (runlength) {
-					if (col >= columns - attr_change.attr.columns() + 1) {
+                                        /* If the next character wouldn't fit in this row then we need to wrap now.
+                                         * Except if we're in the first column: then wrapping is pointless (the
+                                         * character wouldn't fit in the next row either), and our streams don't
+                                         * support empty soft-wrapped rows that such wrapping would create.
+                                         * See https://gitlab.gnome.org/GNOME/gnome-terminal/-/issues/8158 */
+                                        if (col > 0 && col >= columns - attr_change.attr.columns() + 1) {
 						/* Wrap now, write the soft wrapped row's record */
                                                 new_record.width = col;
 						new_record.soft_wrapped = 1;

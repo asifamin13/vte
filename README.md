@@ -25,14 +25,27 @@ Source code
 
 To get the source code, use
 ```
-$ git clone https://gitlab.gnome.org/GNOME/vte
+$ git clone --recurse-submodules https://gitlab.gnome.org/GNOME/vte
 ```
+
+For an existing clone, initialize the dependencies before building or transferring
+the source tree to an offline machine:
+```
+$ git submodule update --init --recursive
+```
+
+With the submodules initialized and system build prerequisites installed, configure
+without downloads using `meson setup build --wrap-mode=nodownload`.
+Suitable system fast_float, fmt, and simdutf are preferred; otherwise the bundled
+sources are used. `--wrap-mode=forcefallback` does not force these direct fallbacks.
+Release archives include the bundled sources and need neither Git nor network
+access to build.
 
 Installation
 ------------
 
 ```
-$ git clone https://gitlab.gnome.org/GNOME/vte  # Get the source code of VTE
+$ git clone --recurse-submodules https://gitlab.gnome.org/GNOME/vte  # Get VTE and its dependencies
 $ cd vte                                        # Change to the toplevel directory
 $ meson _build                                  # Run the configure script
 $ ninja -C _build                               # Build VTE

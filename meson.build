@@ -61,14 +61,6 @@ pcre2_req_version         = '10.21'
 simdutf_req_version       = '6.2.0'
 systemd_req_version       = '220'
 
-# Fallback options
-
-simdutf_default_options = [
-  'ascii=true',
-  'utf8=true',
-  'utf32=true',
-]
-
 # API
 
 vte_api_major_version = 2
@@ -134,6 +126,7 @@ enable_debug = get_option('dbg') or get_option('debug') or get_option('buildtype
 gnome = import('gnome')
 pkg = import('pkgconfig')
 py = import('python')
+fs = import('fs')
 
 # Compilers
 
@@ -686,7 +679,14 @@ pango_dep         = dependency('pango',      version: '>=' + pango_req_version)
 pcre2_dep         = dependency('libpcre2-8', version: '>=' + pcre2_req_version)
 pthreads_dep      = dependency('threads')
 liblz4_dep        = dependency('liblz4', version: '>=' + liblz4_req_version)
-simdutf_dep       = dependency('simdutf', version: '>=' + simdutf_req_version, required: true, default_options: simdutf_default_options)
+simdutf_dep       = dependency('simdutf', version: '>=' + simdutf_req_version, required: false, allow_fallback: false)
+
+if not simdutf_dep.found()
+  if not fs.exists('third_party/simdutf/singleheader/amalgamate.py')
+    error('Missing simdutf sources; run git submodule update --init --recursive')
+  endif
+  subdir('third_party/simdutf-build')
+endif
 
 sysprof_dep       = dependency('sysprof-capture-4', required: get_option('sysprof'))
 config_h.set10('WITH_SYSPROF', sysprof_dep.found())
@@ -716,9 +716,16 @@ if fmt_sysdep.found()
       ],
    )
 else
-  # Override fmt with the subproject
-  subproject('fmt')
-  fmt_dep = dependency('fmt', version: '>=' + fmt_req_version)
+  if not fs.exists('third_party/fmt/include/fmt/format.h')
+    error('Missing fmt sources; run git submodule update --init --recursive')
+  endif
+  fmt_dep = declare_dependency(
+    include_directories: include_directories('third_party/fmt/include', is_system: true),
+    compile_args: [
+      '-DFMT_HEADER_ONLY',
+      '-DFMT_USE_CONSTEVAL',
+    ],
+  )
 endif
 
 if get_option('fribidi')
@@ -759,7 +766,7 @@ endif
 
 config_h.set10('WITH_SYSTEMD', systemd_dep.found())
 
-# Try fast_float.h from system headers, else fall back to subproject
+# Try fast_float.h from system headers, else fall back to bundled headers
 # Since fast_float doesn't seem to have any defines to check its version,
 # try compiling a test programme to see if the version is new enough.
 
@@ -787,7 +794,12 @@ if cxx.compiles('''
   )
   fast_float_dep = dependency('', required: false)
 else
-  fast_float_dep = dependency('fast_float', required: true)
+  if not fs.exists('third_party/fast_float/include/fast_float/fast_float.h')
+    error('Missing fast_float sources; run git submodule update --init --recursive')
+  endif
+  fast_float_dep = declare_dependency(
+    include_directories: include_directories('third_party/fast_float/include', is_system: true),
+  )
 endif
 
 # Write config.h

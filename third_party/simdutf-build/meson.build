@@ -13,68 +13,27 @@
 # You should have received a copy of the GNU Lesser General Public License
 # along with this library.  If not, see <https://www.gnu.org/licenses/>.
 
-project(
-  'simdutf',
-  'cpp',
-  default_options: [
-    'cpp_std=gnu++23'
-  ],
-  license: ['MIT',],
-  version: '8.2.0',
-)
-
-py = import('python')
-py_req_modules = [
-]
-python = py.find_installation(modules: py_req_modules)
-
-simdutf_inc = include_directories('include', is_system: true,)
-
-simdutf_sources = []
+simdutf_inc = include_directories('.', is_system: true)
+simdutf_source_dir = meson.current_source_dir() / '..' / 'simdutf'
 
 simdutf_amalgamate = [
   python,
-  files('singleheader' / 'amalgamate.py'),
-  '--source-dir', meson.project_source_root() / 'src',
-  '--include-dir', meson.project_source_root() / 'include',
-  '--output-dir', meson.project_build_root(),
+  files('../simdutf/singleheader/amalgamate.py'),
+  '--source-dir', simdutf_source_dir / 'src',
+  '--include-dir', simdutf_source_dir / 'include',
+  '--output-dir', meson.current_build_dir(),
   '--no-zip',
   '--no-readme',
+  '--with-ascii',
+  '--with-utf8',
+  '--with-utf32',
 ]
-
-if get_option('ascii')
-  simdutf_amalgamate += ['--with-ascii']
-endif
-
-if get_option('base64')
-  simdutf_amalgamate += ['--with-base64']
-endif
-
-if get_option('detect-encoding')
-  simdutf_amalgamate += ['--with-detect-enc']
-endif
-
-if get_option('latin1')
-  simdutf_amalgamate += ['--with-latin1']
-endif
-
-if get_option('utf8')
-  simdutf_amalgamate += ['--with-utf8']
-endif
-
-if get_option('utf16')
-  simdutf_amalgamate += ['--with-utf16']
-endif
-
-if get_option('utf32')
-  simdutf_amalgamate += ['--with-utf32']
-endif
 
 if get_option('debug')
   simdutf_amalgamate += ['--debug-source']
 endif
 
-simdutf_sources += custom_target(
+simdutf_sources = custom_target(
   'amalgamate',
   command: simdutf_amalgamate,
   input: [],
@@ -101,6 +60,5 @@ simdutf_lib = static_library(
 simdutf_dep = declare_dependency(
   include_directories: simdutf_inc,
   link_with: simdutf_lib,
+  sources: simdutf_sources[1],
 )
-
-meson.override_dependency('simdutf', simdutf_dep)
