@@ -33,6 +33,7 @@
 #include "vteinternal.hh"
 #include "vtepropertiesinternal.hh"
 #include "vtegtk.hh"
+#include "widget.hh"
 #include "caps.hh"
 #include "debug.hh"
 #include "keymap.h"
@@ -2210,6 +2211,77 @@ try
         default: // other subfunctions not implemented in vte
                 return;
         }
+}
+catch (...)
+{
+        // nothing to do here
+}
+
+// xterm_set_selection:
+//
+// Parse an xterm OSC 52 sequence, setting the clipboard (selection "c",
+// via the CLIPBOARD selection) or primary selection (selections "p"/"s")
+// to the base64-encoded data. Only setting is supported; a query
+// (data "?") is ignored, as are all other selections.
+//
+// References: XTerm ctlseqs [https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h3-Operating-System-Commands]
+void
+Terminal::xterm_set_selection(vte::parser::Sequence const& seq,
+                              vte::parser::StringTokeniser::const_iterator& token,
+                              vte::parser::StringTokeniser::const_iterator const& endtoken) noexcept
+try
+{
+        // Note: the OSC parser limits string sequences to
+        // VTE_SEQ_STRING_MAX_CAPACITY characters (locally raised to
+        // 4 Mi chars, sufficient for xterm's 1 MiB sanity limit).
+        // 1398104 = ceil(1 MiB / 3) * 4: the base64 length of exactly
+        // 1 MiB decoded.
+        static constexpr size_t k_max_base64_len = 1398104;
+
+        if (token == endtoken)
+                return;
+
+        auto const psel = *token;
+        ++token;
+
+        auto type = vte::platform::ClipboardType{};
+        if (psel == "c")
+                type = vte::platform::ClipboardType::CLIPBOARD;
+        else if (psel == "p" || psel == "s")
+                type = vte::platform::ClipboardType::PRIMARY;
+        else
+                return;
+
+        if (token == endtoken)
+                return;
+
+        auto const pdata = *token;
+        if (pdata == "?" || pdata.empty() || pdata.size() > k_max_base64_len)
+                return;
+
+        // Decode base64 strictly (no dangling partial quantum).
+        auto decoded = std::string{};
+        auto state = 0;
+        decoded.resize_and_overwrite
+                (pdata.size() / 4 * 3 + 3,
+                 [&](char* data,
+                     size_t buf_size) noexcept -> size_t {
+                         auto save = 0u;
+                         return g_base64_decode_step(pdata.data(),
+                                                     pdata.size(),
+                                                     reinterpret_cast<unsigned char*>(data),
+                                                     &state,
+                                                     &save);
+                 });
+
+        if (state != 0 || decoded.empty() || decoded.size() > 1048576)
+                return;
+
+        // Must be valid UTF-8.
+        if (!g_utf8_validate(decoded.data(), decoded.size(), nullptr))
+                return;
+
+        widget()->clipboard_set_text(type, decoded.data(), decoded.size());
 }
 catch (...)
 {
@@ -7753,6 +7825,10 @@ try
                 conemu_extension(seq, it, cend);
                 break;
 
+        case VTE_OSC_XTERM_SET_XSELECTION:
+                xterm_set_selection(seq, it, cend);
+                break;
+
         case VTE_OSC_XTERM_SET_ICON_TITLE:
         case VTE_OSC_XTERM_SET_XPROPERTY:
         case VTE_OSC_XTERM_SET_COLOR_MOUSE_CURSOR_FG:
@@ -7763,7 +7839,6 @@ try
         case VTE_OSC_XTERM_SET_CURSOR_NAME:
         case VTE_OSC_XTERM_LOGFILE:
         case VTE_OSC_XTERM_SET_FONT:
-        case VTE_OSC_XTERM_SET_XSELECTION:
         case VTE_OSC_XTERM_SET_COLOR_MODE:
         case VTE_OSC_XTERM_RESET_COLOR_MOUSE_CURSOR_FG:
         case VTE_OSC_XTERM_RESET_COLOR_MOUSE_CURSOR_BG:

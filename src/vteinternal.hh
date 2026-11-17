@@ -1796,6 +1796,9 @@ public:
         void conemu_extension(vte::parser::Sequence const& seq,
                               vte::parser::StringTokeniser::const_iterator& token,
                               vte::parser::StringTokeniser::const_iterator const& endtoken) noexcept;
+        void xterm_set_selection(vte::parser::Sequence const& seq,
+                                 vte::parser::StringTokeniser::const_iterator& token,
+                                 vte::parser::StringTokeniser::const_iterator const& endtoken) noexcept;
 
         // helpers
 
